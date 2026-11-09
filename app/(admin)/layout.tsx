@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getActor } from "@/lib/data/dal/session";
 import { getQueueCounts } from "@/lib/data/dal/tickets";
@@ -16,6 +17,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // These layouts read the session and the database, so they can never be
+  // prerendered. Without this, `next build` runs them and fails on missing env.
+  await connection();
+
   const actor = await getActor();
   if (!actor) redirect("/sign-in?next=/admin");
   if (actor.role !== "admin") redirect("/dashboard");

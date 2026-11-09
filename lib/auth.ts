@@ -22,16 +22,23 @@ const authSchema = {
   verification: schema.verification,
 };
 
-if (!process.env.BETTER_AUTH_SECRET) {
-  // Fail loudly in dev instead of silently signing sessions with an empty secret.
-  throw new Error(
-    "BETTER_AUTH_SECRET is not set. Generate one with: openssl rand -base64 32",
-  );
+function requireSecret(): string {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    // Fail loudly rather than silently signing sessions with an empty secret.
+    // Thrown on first use, not on import: `next build` imports every route and
+    // must not fail when secrets live only in the deployment environment.
+    throw new Error(
+      "BETTER_AUTH_SECRET is not set. Generate one with: openssl rand -base64 32",
+    );
+  }
+  return secret;
 }
 
-export const auth = betterAuth({
+const createAuth = () =>
+  betterAuth({
   appName: "Handly",
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: requireSecret(),
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
 
   database: drizzleAdapter(db, {
@@ -80,6 +87,35 @@ export const auth = betterAuth({
   },
 
   plugins: [admin(), nextCookies()],
+  });
+
+/**
+ * The auth instance is built on first use.
+ *
+ * Both `betterAuth()` and its secret check used to run at import time, so
+ * `next build` failed outright when only the deployment environment had the
+ * secret. Deferring keeps the build environment-independent while still failing
+ * loudly on the first real request.
+ */
+let instance: ReturnType<typeof createAuth> | undefined;
+
+function getAuth(): ReturnType<typeof createAuth> {
+  instance ??= createAuth();
+  return instance;
+}
+
+export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
+  get(_target, prop) {
+    const instance = getAuth();
+    const value = Reflect.get(instance, prop) as unknown;
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+  // Without this, `"handler" in auth` (used by toNextJsHandler) reports false
+  // against the empty proxy target and the adapter treats auth as a bare
+  // function, which fails at runtime.
+  has(_target, prop) {
+    return prop in getAuth();
+  },
 });
 
-export type AuthSession = typeof auth.$Infer.Session;
+export type AuthSession = ReturnType<typeof createAuth>["$Infer"]["Session"];
