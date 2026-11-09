@@ -1,7 +1,6 @@
 import { Lock } from "lucide-react";
 import { formatDateTime, formatRelativeTime } from "@/lib/format";
-import type { TicketReply } from "@/lib/mock-data";
-import { getPerson } from "@/lib/mock-data";
+import type { TicketReply } from "@/lib/view-types";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
 
@@ -17,9 +16,16 @@ export function TicketThread({
   return (
     <ol className="space-y-4" aria-label="Conversation">
       {replies.map((reply) => {
-        const author = getPerson(reply.authorId);
-        const initials = author?.initials ?? "??";
-        const name = author?.name ?? "Unknown";
+        // The DAL already resolved the display name; derive initials from it.
+        const name = reply.authorName;
+        const initials =
+          name
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((part) => part[0] ?? "")
+            .join("")
+            .toUpperCase() || "??";
         const time = formatRelativeTime(reply.createdAt);
 
         if (reply.kind === "system") {

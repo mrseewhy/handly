@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 import { formatTimeLeft } from "@/lib/format";
-import type { SlaState } from "@/lib/mock-data";
+import type { SlaState } from "@/lib/view-types";
 
 const slaStyles: Record<SlaState, { badge: string; label: string }> = {
   on_track: { badge: "text-success bg-success-subtle", label: "On track" },
@@ -31,7 +31,7 @@ export function SlaBadge({
         className,
       )}
     >
-      {isBreached ? "SLA breached" : `${timeLeft}`}
+      {isBreached ? "SLA breached" : timeLeft}
     </span>
   );
 }

@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, DangerSummary } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import type { Person } from "@/lib/mock-data";
+import type { Person } from "@/lib/view-types";
+import { removeAdmin } from "@/lib/data/actions/tickets";
 
 export function AdminRowActions({ admin }: { admin: Person }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   function openConfirm(id: string) {
     setPendingId(id);
@@ -19,14 +21,22 @@ export function AdminRowActions({ admin }: { admin: Person }) {
 
   function handleConfirm() {
     if (!pendingId) return;
-    toast({
-      tone: "error",
-      title: "Admin removed",
-      description:
-        "Removing this admin revokes dashboard access. Activity history is preserved. This action is pending backend integration.",
+
+    startTransition(async () => {
+      const result = await removeAdmin(pendingId);
+      setOpen(false);
+      setPendingId(null);
+
+      if (!result.ok) {
+        toast({ tone: "error", title: "Could not remove admin", description: result.error });
+        return;
+      }
+      toast({
+        tone: "success",
+        title: "Admin access removed",
+        description: "They keep their account and tickets, as a customer.",
+      });
     });
-    setOpen(false);
-    setPendingId(null);
   }
 
   return (

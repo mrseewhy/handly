@@ -12,8 +12,9 @@ import {
   FieldError,
 } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/cn";
+import { rules, useFormFields } from "@/lib/use-form-fields";
 import { useState } from "react";
+import { submitContactMessage } from "@/lib/data/actions/contact";
 
 const channels = [
   {
@@ -49,114 +50,52 @@ const TOPICS = [
   { value: "other", label: "Something else" },
 ];
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+const formRules = {
+  name: rules.minLength(2, "Enter your name."),
+  email: rules.email(),
+  topic: rules.choice("Choose a topic."),
+  message: rules.minLength(10, "Write at least a short message."),
+};
 
 export function ContactForm() {
   const { toast } = useToast();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [topic, setTopic] = useState("");
-  const [message, setMessage] = useState("");
-  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const { values, errors, setValue, touchAll, isValid } = useFormFields({
+    rules: formRules,
+  });
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
-
-  const nameTouched = name !== "";
-  const emailTouched = email !== "";
-  const messageTouched = message !== "";
-
-  const nameValid = name.trim().length >= 2;
-  const emailValid = isValidEmail(email);
-  const topicValid = topic !== "";
-  const messageValid = message.trim().length >= 10;
-
-  const nameError =
-    errors.name ?? (nameTouched && !nameValid ? "Enter your name." : null);
-  const emailError =
-    errors.email ??
-    (emailTouched && !emailValid ? "Enter a valid email address." : null);
-  const topicError = errors.topic ?? null;
-  const messageError =
-    errors.message ??
-    (messageTouched && !messageValid ? "Write at least a short message." : null);
-
-  const canSubmit = nameValid && emailValid && topicValid && messageValid && !pending;
-
-  function handleNameChange(value: string) {
-    setName(value);
-    if (errors.name) setErrors((prev) => ({ ...prev, name: null }));
-  }
-  function handleEmailChange(value: string) {
-    setEmail(value);
-    if (errors.email) setErrors((prev) => ({ ...prev, email: null }));
-  }
-  function handleTopicChange(value: string) {
-    setTopic(value);
-    if (errors.topic) setErrors((prev) => ({ ...prev, topic: null }));
-  }
-  function handleMessageChange(value: string) {
-    setMessage(value);
-    if (errors.message) setErrors((prev) => ({ ...prev, message: null }));
-  }
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    touchAll();
+    if (!isValid || pending) return;
 
-    setErrors({});
-
-    if (!nameValid) {
-      setErrors((prev) => ({ ...prev, name: "Enter your name." }));
-      return;
-    }
-    if (!emailValid) {
-      setErrors((prev) => ({ ...prev, email: "Enter a valid email address." }));
-      return;
-    }
-    if (!topicValid) {
-      setErrors((prev) => ({ ...prev, topic: "Choose a topic." }));
-      return;
-    }
-    if (!messageValid) {
-      setErrors((prev) => ({ ...prev, message: "Write at least a short message." }));
-      return;
-    }
-
+    setFormError(null);
     setPending(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      setSent(true);
-      toast({
-        tone: "success",
-        title: "Message sent",
-        description:
-          "This demo does not connect to a backend yet. In production your message would be delivered to the Handly team.",
-      });
-    } catch {
-      toast({
-        tone: "error",
-        title: "Message could not be sent",
-        description:
-          "We could not send your message. Try again in a moment.",
-      });
-    } finally {
-      setPending(false);
+    const result = await submitContactMessage({
+      name: values.name ?? "",
+      email: values.email ?? "",
+      topic: values.topic ?? "other",
+      message: values.message ?? "",
+    });
+    setPending(false);
+
+    if (!result.ok) {
+      setFormError(result.error);
+      return;
     }
+
+    setSent(true);
+    toast({
+      tone: "success",
+      title: "Message received",
+      description: "Your message is with the Handly team.",
+    });
   }
 
   return (
     <>
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 py-16 text-center md:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold tracking-tight">Talk to a human</h1>
-          <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-            Questions about plans, migrations, or anything else — we answer every message.
-          </p>
-        </div>
-      </section>
-
       <section className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:px-6 lg:grid-cols-[1fr_1.2fr] lg:px-8">
         <div className="space-y-4">
           {channels.map((c) => (
@@ -189,8 +128,8 @@ export function ContactForm() {
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
                     <Mail className="h-3.5 w-3.5" aria-hidden />
                   </span>
-                  We received your message and will reply within one business day. This demo does not
-                  connect to a backend yet, so no email was actually sent.
+                  We received your message and will reply within one business day. It has been
+                  saved to our support inbox.
                 </p>
               </div>
             ) : (
@@ -202,17 +141,16 @@ export function ContactForm() {
                       id="contact-name"
                       name="name"
                       placeholder="Your name"
-                      value={name}
-                      onChange={(e) => handleNameChange(e.target.value)}
-                      aria-invalid={nameError ? true : undefined}
-                      aria-describedby={nameError ? "contact-name-error" : undefined}
-                      className={cn(nameError && "aria-[invalid=true]")}
+                      value={values.name ?? ""}
+                      onChange={(e) => setValue("name", e.target.value)}
+                      aria-invalid={errors.name ? true : undefined}
+                      aria-describedby={errors.name ? "contact-name-error" : undefined}
                     />
-                    {nameError ? (
+                    {errors.name && (
                       <FieldError id="contact-name-error" className="mt-1">
-                        {nameError}
+                        {errors.name}
                       </FieldError>
-                    ) : null}
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="contact-email">Work email</Label>
@@ -222,17 +160,16 @@ export function ContactForm() {
                       type="email"
                       inputMode="email"
                       placeholder="you@company.com"
-                      value={email}
-                      onChange={(e) => handleEmailChange(e.target.value)}
-                      aria-invalid={emailError ? true : undefined}
-                      aria-describedby={emailError ? "contact-email-error" : undefined}
-                      className={cn(emailError && "aria-[invalid=true]")}
+                      value={values.email ?? ""}
+                      onChange={(e) => setValue("email", e.target.value)}
+                      aria-invalid={errors.email ? true : undefined}
+                      aria-describedby={errors.email ? "contact-email-error" : undefined}
                     />
-                    {emailError ? (
+                    {errors.email && (
                       <FieldError id="contact-email-error" className="mt-1">
-                        {emailError}
+                        {errors.email}
                       </FieldError>
-                    ) : null}
+                    )}
                   </div>
                 </div>
 
@@ -241,25 +178,25 @@ export function ContactForm() {
                   <Select
                     id="contact-topic"
                     name="topic"
-                    value={topic}
-                    onChange={(e) => handleTopicChange(e.target.value)}
-                    aria-invalid={topicError ? true : undefined}
-                    aria-describedby={topicError ? "contact-topic-error" : undefined}
+                    value={values.topic ?? ""}
+                    onChange={(e) => setValue("topic", e.target.value)}
+                    aria-invalid={errors.topic ? true : undefined}
+                    aria-describedby={errors.topic ? "contact-topic-error" : undefined}
                   >
                     <option value="" disabled>
                       Choose a topic…
                     </option>
-                    {TOPICS.map((topic) => (
-                      <option key={topic.value} value={topic.value}>
-                        {topic.label}
+                    {TOPICS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </Select>
-                  {topicError ? (
+                  {errors.topic && (
                     <FieldError id="contact-topic-error" className="mt-1">
-                      {topicError}
+                      {errors.topic}
                     </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -269,26 +206,26 @@ export function ContactForm() {
                     name="message"
                     rows={6}
                     placeholder="How can we help?"
-                    value={message}
-                    onChange={(e) => handleMessageChange(e.target.value)}
-                    aria-invalid={messageError ? true : undefined}
-                    aria-describedby={messageError ? "contact-message-error" : undefined}
-                    className={cn(messageError && "aria-[invalid=true]")}
+                    value={values.message ?? ""}
+                    onChange={(e) => setValue("message", e.target.value)}
+                    aria-invalid={errors.message ? true : undefined}
+                    aria-describedby={errors.message ? "contact-message-error" : undefined}
                   />
                   <FieldHint>The more context you share, the better our first reply.</FieldHint>
-                  {messageError ? (
+                  {errors.message && (
                     <FieldError id="contact-message-error" className="mt-1">
-                      {messageError}
+                      {errors.message}
                     </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full sm:w-auto"
-                  disabled={!canSubmit}
-                  aria-disabled={!canSubmit || undefined}
-                >
+                {formError && (
+                  <p role="alert" className="text-[13px] text-danger">
+                    {formError}
+                  </p>
+                )}
+
+                <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
                   {pending ? "Sending…" : "Send message"}
                 </Button>
               </form>

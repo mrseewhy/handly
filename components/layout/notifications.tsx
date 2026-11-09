@@ -5,7 +5,8 @@ import { Bell, CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-reac
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatRelativeTime } from "@/lib/format";
-import { adminNotifications, userNotifications, type AppNotification } from "@/lib/mock-data";
+import type { AppNotification } from "@/lib/view-types";
+import type { PersonRole } from "@/lib/view-types";
 
 function remapUserHref(href: string): string {
   if (href.startsWith("/tickets/")) {
@@ -28,7 +29,7 @@ const toneColor = {
   danger: "text-danger",
 } as const;
 
-function NotificationList({ items, role }: { items: AppNotification[]; role: "user" | "admin" }) {
+function NotificationList({ items, role }: { items: AppNotification[]; role: PersonRole }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm text-muted-foreground">You are all caught up.</p>;
   }
@@ -38,7 +39,7 @@ function NotificationList({ items, role }: { items: AppNotification[]; role: "us
         const Icon = toneIcon[n.tone];
         return (
           <li key={n.id}>
-            <Link href={role === "user" ? remapUserHref(n.href) : n.href} className="flex gap-3 px-3 py-3 hover:bg-surface-muted">
+            <Link href={role === "customer" ? remapUserHref(n.href) : n.href} className="flex gap-3 px-3 py-3 hover:bg-surface-muted">
               <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", toneColor[n.tone])} aria-hidden />
               <span className="min-w-0">
                 <span className="flex items-center gap-2">
@@ -60,14 +61,16 @@ function NotificationList({ items, role }: { items: AppNotification[]; role: "us
 
 export function NotificationsButton({
   role,
+  items,
   className,
 }: {
-  role: "user" | "admin";
+  role: PersonRole;
+  /** Server-provided for the signed-in user. */
+  items: AppNotification[];
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const items = role === "admin" ? adminNotifications : userNotifications;
   const unread = items.filter((n) => !n.read).length;
 
   useEffect(() => {
@@ -117,6 +120,13 @@ export function NotificationsButton({
           <div className="max-h-96 overflow-y-auto">
             <NotificationList items={items} role={role} />
           </div>
+          <Link
+            href={role === "admin" ? "/admin/notifications" : "/dashboard/notifications"}
+            onClick={() => setOpen(false)}
+            className="block border-t border-border px-3 py-2 text-center text-[13px] font-medium text-primary hover:bg-surface-muted"
+          >
+            View all notifications
+          </Link>
         </div>
       )}
     </div>

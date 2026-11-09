@@ -1,20 +1,31 @@
 import type { Metadata } from "next";
 import { Inbox } from "lucide-react";
-import { unansweredTickets } from "@/lib/mock-data";
+import { listUnansweredTickets } from "@/lib/data/dal/tickets";
 import { formatRelativeTime } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
+import { Pagination } from "@/components/ui/pagination";
 import { Avatar } from "@/components/ui/avatar";
 import { SlaBadge } from "@/components/ui/sla";
 import { PriorityInline, StatusBadge } from "@/components/tickets/status-badges";
 import Link from "next/link";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
 export const metadata: Metadata = {
   title: "Unanswered tickets · Handly admin",
 };
 
-export default function UnansweredTicketsPage() {
+export default async function UnansweredTicketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  await requireAdminPage();
+  const params = await searchParams;
+  const result = await listUnansweredTickets(params.page);
+  const unansweredTickets = result.items;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -31,7 +42,8 @@ export default function UnansweredTicketsPage() {
       />
 
       <p className="text-[13px] text-subtle-foreground" aria-live="polite">
-        Showing {unansweredTickets.length} unanswered ticket{unansweredTickets.length === 1 ? "" : "s"}.
+        Showing {unansweredTickets.length} of {result.total} unanswered ticket
+        {result.total === 1 ? "" : "s"}.
       </p>
 
       {unansweredTickets.length > 0 ? (
@@ -92,6 +104,8 @@ export default function UnansweredTicketsPage() {
           />
         </Card>
       )}
+
+      <Pagination page={result} basePath="/admin/tickets/unanswered" />
     </div>
   );
 }

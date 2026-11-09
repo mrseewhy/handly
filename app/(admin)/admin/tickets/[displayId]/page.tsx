@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Send } from "lucide-react";
-import { getRepliesForTicket, getTicketByDisplayId } from "@/lib/mock-data";
+import { getTicket, listTicketReplies } from "@/lib/data/dal/tickets";
+import { listTicketAttachments } from "@/lib/data/dal/attachments";
+import { AttachmentList } from "@/components/tickets/attachment-list";
+import { listAdmins } from "@/lib/data/dal/people";
+import { AdminReplyForm, TicketPropertiesForm } from "@/components/admin/ticket-controls";
 import { formatDateTime, slaPercentUsed } from "@/lib/format";
-import { CATEGORY_LABELS, priorityConfig, statusConfig, TICKET_PRIORITIES, TICKET_STATUSES } from "@/lib/ticket-config";
+import { CATEGORY_LABELS } from "@/lib/ticket-config";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Label, Select, Textarea } from "@/components/ui/input";
 import { SlaMeter } from "@/components/ui/sla";
 import { PriorityBadge, StatusBadge } from "@/components/tickets/status-badges";
 import { TicketThread } from "@/components/tickets/ticket-thread";
-import { people } from "@/lib/mock-data";
-import { cn } from "@/lib/cn";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
 interface PageProps {
   params: Promise<{ displayId: string }>;
@@ -23,19 +23,24 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { displayId } = await params;
-  const ticket = getTicketByDisplayId(decodeURIComponent(displayId));
+  const ticket = await getTicket(decodeURIComponent(displayId));
   return {
     title: ticket ? `${ticket.displayId} · Handly admin` : "Ticket not found · Handly admin",
   };
 }
 
 export default async function AdminTicketDetailPage({ params }: PageProps) {
+  await requireAdminPage();
   const { displayId } = await params;
-  const ticket = getTicketByDisplayId(decodeURIComponent(displayId));
+  const ticket = await getTicket(decodeURIComponent(displayId));
   if (!ticket) notFound();
 
-  const replies = getRepliesForTicket(ticket.id);
-  const agents = people.filter((p) => p.role === "admin" && p.status !== "invited");
+  const [replies, admins, attachments] = await Promise.all([
+    listTicketReplies(ticket.id),
+    listAdmins(),
+    listTicketAttachments(ticket.id),
+  ]);
+  const agents = admins.map((a) => ({ id: a.id, name: a.name }));
 
   return (
     <div className="space-y-6">
@@ -72,36 +77,16 @@ export default async function AdminTicketDetailPage({ params }: PageProps) {
                 Opened {formatDateTime(ticket.createdAt)}
               </span>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <TicketThread replies={replies} />
+              <AttachmentList attachments={attachments} className="border-t border-border pt-4" />
             </CardContent>
           </Card>
 
           {/* Composer */}
           <Card>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="reply">Reply to {ticket.creatorName}</Label>
-                <Textarea
-                  id="reply"
-                  rows={5}
-                  placeholder="Write a reply…"
-                />
-                <p className="text-[13px] text-muted-foreground">
-                  Replies are public. Internal notes are not sent to the customer.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  title="Connected backend required to send replies"
-                >
-                  <Send className="h-4 w-4" aria-hidden />
-                  Send reply
-                </Button>
-              </div>
+            <CardContent>
+              <AdminReplyForm displayId={ticket.displayId} creatorName={ticket.creatorName} />
             </CardContent>
           </Card>
         </div>
@@ -113,37 +98,13 @@ export default async function AdminTicketDetailPage({ params }: PageProps) {
               <CardTitle className="text-base">Properties</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="status">Status</Label>
-                <Select id="status" defaultValue={ticket.status}>
-                  {TICKET_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {statusConfig[s].label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="priority">Priority</Label>
-                <Select id="priority" defaultValue={ticket.priority}>
-                  {TICKET_PRIORITIES.map((p) => (
-                    <option key={p} value={p}>
-                      {priorityConfig[p].label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="assignee">Assignee</Label>
-                <Select id="assignee" defaultValue={ticket.assigneeId ?? ""}>
-                  <option value="">Unassigned</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+              <TicketPropertiesForm
+                displayId={ticket.displayId}
+                status={ticket.status}
+                priority={ticket.priority}
+                assigneeId={ticket.assigneeId}
+                agents={agents}
+              />
               <div className="border-t border-border pt-4">
                 <SlaMeter
                   state={ticket.slaState}

@@ -2,12 +2,16 @@ import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Search, Users as UsersIcon } from "lucide-react";
-import { adminUsers } from "@/lib/mock-data";
+import { Users as UsersIcon } from "lucide-react";
+import { listCustomers } from "@/lib/data/dal/people";
+import type { Person } from "@/lib/view-types";
 import { formatDate, formatRelativeTime } from "@/lib/format";
 import { UserActions } from "@/components/admin/user-actions";
+import { PromoteUserButton } from "@/components/admin/promote-user-button";
+import { cn } from "@/lib/cn";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
-const statusBadge: Record<string, string> = {
+const userStatusBadge: Record<string, string> = {
   active: "text-success bg-success-subtle",
   invited: "text-warning bg-warning-subtle",
   suspended: "text-danger bg-danger-subtle",
@@ -17,7 +21,10 @@ export const metadata = {
   title: "Users · Handly admin",
 };
 
-export default function ManageUsersPage() {
+export default async function ManageUsersPage() {
+  await requireAdminPage();
+  const adminUsers = await listCustomers();
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -32,8 +39,7 @@ export default function ManageUsersPage() {
         ]}
       />
 
-      <UserActions />
-
+      
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <caption className="sr-only">Customer accounts</caption>
@@ -72,7 +78,7 @@ export default function ManageUsersPage() {
   );
 }
 
-function UserRow({ user }: { user: (typeof adminUsers)[number] }) {
+function UserRow({ user }: { user: Person }) {
   return (
     <tr className="border-t border-border hover:bg-surface-muted">
       <td className="px-4 py-3">
@@ -91,7 +97,7 @@ function UserRow({ user }: { user: (typeof adminUsers)[number] }) {
         {user.ticketCount}
       </td>
       <td className="px-4 py-3">
-        <span className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium tabular-nums">
+        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", userStatusBadge[user.status])}>
           {user.status}
         </span>
       </td>
@@ -99,7 +105,8 @@ function UserRow({ user }: { user: (typeof adminUsers)[number] }) {
         {user.lastSeenAt ? formatRelativeTime(user.lastSeenAt) : "—"}
       </td>
       <td className="px-4 py-3">
-        <span className="flex justify-end">
+        <span className="flex items-center justify-end gap-1">
+          {user.status === "active" && <PromoteUserButton user={user} />}
           <UserActions user={user} />
         </span>
       </td>

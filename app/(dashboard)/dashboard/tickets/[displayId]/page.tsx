@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Send } from "lucide-react";
-import { getRepliesForTicket, getTicketByDisplayId } from "@/lib/mock-data";
+import { getTicket, listTicketReplies } from "@/lib/data/dal/tickets";
+import { listTicketAttachments } from "@/lib/data/dal/attachments";
+import { AttachmentList } from "@/components/tickets/attachment-list";
+import { CustomerReplyForm } from "@/components/tickets/customer-reply-form";
 import { formatDateTime, slaPercentUsed } from "@/lib/format";
 import { CATEGORY_LABELS } from "@/lib/ticket-config";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { SlaMeter } from "@/components/ui/sla";
 import { PriorityBadge, StatusBadge } from "@/components/tickets/status-badges";
 import { TicketThread } from "@/components/tickets/ticket-thread";
-import { Textarea } from "@/components/ui/input";
 
 interface PageProps {
   params: Promise<{ displayId: string }>;
@@ -19,16 +19,20 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { displayId } = await params;
-  const ticket = getTicketByDisplayId(decodeURIComponent(displayId));
+  const ticket = await getTicket(decodeURIComponent(displayId));
   return { title: ticket ? `${ticket.displayId} · Handly` : "Ticket not found · Handly" };
 }
 
 export default async function TicketDetailPage({ params }: PageProps) {
   const { displayId } = await params;
-  const ticket = getTicketByDisplayId(decodeURIComponent(displayId));
-  if (!ticket || ticket.creatorId !== "u-1") notFound();
+  const ticket = await getTicket(decodeURIComponent(displayId));
+  // getTicket already scopes to the signed-in customer.
+  if (!ticket) notFound();
 
-  const replies = getRepliesForTicket(ticket.id);
+  const [replies, attachments] = await Promise.all([
+    listTicketReplies(ticket.id),
+    listTicketAttachments(ticket.id),
+  ]);
   const isOpen = !["resolved", "closed"].includes(ticket.status);
 
   return (
@@ -53,31 +57,16 @@ export default async function TicketDetailPage({ params }: PageProps) {
                 Opened {formatDateTime(ticket.createdAt)}
               </span>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <TicketThread replies={replies} />
+              <AttachmentList attachments={attachments} className="border-t border-border pt-4" />
             </CardContent>
           </Card>
 
           {isOpen ? (
             <Card>
-              <CardContent className="space-y-3">
-                <label htmlFor="reply" className="block text-sm font-medium">
-                  Your reply
-                </label>
-                <Textarea
-                  id="reply"
-                  rows={4}
-                  placeholder="Write your reply…"
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] text-muted-foreground">
-                    Replies are emailed to you and added to this thread.
-                  </p>
-                  <Button type="button">
-                    <Send className="h-4 w-4" aria-hidden />
-                    Send reply
-                  </Button>
-                </div>
+              <CardContent>
+                <CustomerReplyForm displayId={ticket.displayId} />
               </CardContent>
             </Card>
           ) : (

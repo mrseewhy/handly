@@ -12,7 +12,7 @@ import {
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { marketingTestimonials } from "@/lib/mock-data";
+import { marketingTestimonials } from "@/lib/marketing-content";
 
 export const metadata: Metadata = {
   title: "Handly — Customer support that stays calm",

@@ -9,77 +9,57 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, FieldError } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
-import { useState } from "react";
+import { rules, useFormFields } from "@/lib/use-form-fields";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { signInAction } from "@/lib/data/actions/auth";
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+const formRules = {
+  email: rules.email(),
+  password: rules.required("Enter your password."),
+};
 
-export function SignInForm() {
+export function SignInForm({ next }: { next?: string | null }) {
   const { toast } = useToast();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { values, errors, setValue, touchAll, isValid } = useFormFields({
+    rules: formRules,
+  });
   const [showPassword, setShowPassword] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
-  const emailTouched = email !== "";
-  const emailValid = isValidEmail(email);
-  const emailFieldInvalid = emailTouched && !emailValid;
-  const canSubmit = emailValid && password.length >= 1;
+  const email = values.email ?? "";
+  const password = values.password ?? "";
 
-  function handleEmailChange(value: string) {
-    setEmail(value);
-    if (emailError) setEmailError(null);
-  }
-
-  function handlePasswordChange(value: string) {
-    setPassword(value);
-    if (passwordError) setPasswordError(null);
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    touchAll();
+    if (!isValid || pending) return;
+    setFormError(null);
 
-    setEmailError(null);
-    setPasswordError(null);
+    startTransition(async () => {
+      const result = await signInAction({ email, password });
 
-    if (!emailValid) {
-      setEmailError("Enter a valid email address.");
-      return;
-    }
-    if (password.length < 1) {
-      setPasswordError("Enter your password.");
-      return;
-    }
+      if (!result.ok) {
+        setFormError(result.error);
+        return;
+      }
 
-    try {
-      toast({
-        tone: "info",
-        title: "Sign in",
-        description:
-          "This demo does not connect to a backend yet. In production this would authenticate you and sign you in.",
-      });
-    } catch {
-      toast({
-        tone: "error",
-        title: "Sign in failed",
-        description:
-          "We could not start the sign-in flow. Try again in a moment.",
-      });
-    }
+      toast({ tone: "success", title: "Signed in", description: "Welcome back." });
+      // Honour `next` (set by proxy.ts when it bounced an anonymous visit),
+      // otherwise land on the area that matches the role. Sending an admin to
+      // /dashboard made them pass through the customer shell first.
+      const fallback = result.role === "admin" ? "/admin" : "/dashboard";
+      router.replace(next ?? fallback);
+      router.refresh();
+    });
   }
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="flex h-14 items-center justify-between px-4 md:px-6 border-b border-border bg-surface">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-md font-semibold tracking-tight text-foreground"
-        >
-          <Logo />
-        </Link>
+      <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 md:px-6">
+        <Logo />
         <ThemeToggle />
       </header>
 
@@ -116,20 +96,15 @@ export function SignInForm() {
                     autoComplete="email"
                     placeholder="you@company.com"
                     value={email}
-                    onChange={(e) => handleEmailChange(e.target.value)}
-                    aria-invalid={emailFieldInvalid || undefined}
-                    aria-describedby={emailFieldInvalid ? "signin-email-error" : undefined}
-                    className={cn(emailFieldInvalid && "aria-[invalid=true]")}
+                    onChange={(e) => setValue("email", e.target.value)}
+                    aria-invalid={errors.email ? true : undefined}
+                    aria-describedby={errors.email ? "signin-email-error" : undefined}
                   />
-                  {emailError ? (
+                  {errors.email && (
                     <FieldError id="signin-email-error" className="mt-1">
-                      {emailError}
+                      {errors.email}
                     </FieldError>
-                  ) : emailTouched && email && !emailValid ? (
-                    <FieldError className="mt-1">
-                      Enter a valid email address.
-                    </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -150,16 +125,16 @@ export function SignInForm() {
                       autoComplete="current-password"
                       placeholder="••••••••••••"
                       value={password}
-                      onChange={(e) => handlePasswordChange(e.target.value)}
-                      aria-invalid={passwordError ? true : undefined}
-                      aria-describedby={passwordError ? "signin-password-error" : undefined}
-                      className={cn("pr-10", passwordError && "aria-[invalid=true]")}
+                      onChange={(e) => setValue("password", e.target.value)}
+                      aria-invalid={errors.password ? true : undefined}
+                      aria-describedby={errors.password ? "signin-password-error" : undefined}
+                      className={cn("pr-10")}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2.5 top-1/2 h-6 w-6 -translate-y-1/2 rounded text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                      className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-surface-muted hover:text-foreground"
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" aria-hidden />
@@ -168,20 +143,21 @@ export function SignInForm() {
                       )}
                     </button>
                   </div>
-                  {passwordError ? (
+                  {errors.password && (
                     <FieldError id="signin-password-error" className="mt-1">
-                      {passwordError}
+                      {errors.password}
                     </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={!canSubmit}
-                  aria-disabled={!canSubmit || undefined}
-                >
-                  Sign in
+                {formError && (
+                  <p role="alert" className="rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-[13px] text-danger">
+                    {formError}
+                  </p>
+                )}
+
+                <Button type="submit" className="w-full" disabled={pending}>
+                  {pending ? "Signing in…" : "Sign in"}
                 </Button>
               </form>
             </CardContent>

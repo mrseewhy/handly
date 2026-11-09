@@ -1,108 +1,90 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { CircleCheck } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea, FieldHint, FieldError } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { CATEGORY_LABELS, TICKET_CATEGORIES, priorityConfig, TICKET_PRIORITIES } from "@/lib/ticket-config";
+import { rules, useFormFields } from "@/lib/use-form-fields";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createTicket } from "@/lib/data/actions/tickets";
+import { filesToUploadInput } from "@/lib/attachments-config";
+import { AttachmentPicker } from "@/components/tickets/attachment-picker";
+import type { TicketCategory, TicketPriority } from "@/lib/ticket-config";
+
+const formRules = {
+  subject: rules.minLength(5, "Enter a subject for your issue."),
+  category: rules.choice("Choose a category."),
+  description: rules.minLength(15, "Add a bit more detail so we can help faster."),
+};
 
 export function CreateTicketForm() {
   const { toast } = useToast();
-  const [subject, setSubject] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState<string>("medium");
-  const [description, setDescription] = useState("");
-  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const { values, errors, setValue, touchAll, isValid } = useFormFields({
+    rules: formRules,
+    initial: { priority: "medium" },
+  });
   const [pending, setPending] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const subjectTouched = subject !== "";
-  const descriptionTouched = description !== "";
-
-  const subjectValid = subject.trim().length >= 5;
-  const descriptionValid = description.trim().length >= 15;
-
-  const subjectError = errors.subject ?? (subjectTouched && !subjectValid ? "Enter a subject for your issue." : null);
-  const descriptionError = errors.description ?? (descriptionTouched && !descriptionValid ? "Add a bit more detail so we can help faster." : null);
-
-  const canSubmit = subjectValid && descriptionValid && !pending;
-
-  function handleSubjectChange(value: string) {
-    setSubject(value);
-    if (errors.subject) setErrors((prev: Record<string, string | null>) => ({ ...prev, subject: null }));
-  }
-  function handleCategoryChange(value: string) {
-    setCategory(value);
-    if (errors.category) setErrors((prev: Record<string, string | null>) => ({ ...prev, category: null }));
-  }
-  function handlePriorityChange(value: string) {
-    setPriority(value);
-    if (errors.priority) setErrors((prev: Record<string, string | null>) => ({ ...prev, priority: null }));
-  }
-  function handleDescriptionChange(value: string) {
-    setDescription(value);
-    if (errors.description) setErrors((prev: Record<string, string | null>) => ({ ...prev, description: null }));
-  }
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const router = useRouter();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    touchAll();
+    if (!isValid || pending) return;
 
-    setErrors({});
-
-    if (!subjectValid) {
-      setErrors((prev: Record<string, string | null>) => ({ ...prev, subject: "Enter a subject for your issue." }));
-      return;
-    }
-    if (!descriptionValid) {
-      setErrors((prev: Record<string, string | null>) => ({ ...prev, description: "Add a bit more detail so we can help faster." }));
-      return;
-    }
-
+    setFormError(null);
     setPending(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      setSubmitted(true);
-      toast({
-        tone: "success",
-        title: "Ticket created",
-        description:
-          "This demo does not connect to a backend yet. In production your ticket would be created and you would be returned to your queue.",
-      });
-    } catch {
-      toast({
-        tone: "error",
-        title: "Could not create ticket",
-        description:
-          "We could not create your ticket. Try again in a moment.",
-      });
-    } finally {
-      setPending(false);
+    const result = await createTicket({
+      subject: values.subject ?? "",
+      description: values.description ?? "",
+      category: (values.category ?? "other") as TicketCategory,
+      priority: (values.priority ?? "medium") as TicketPriority,
+      files: await filesToUploadInput(files),
+    });
+    setPending(false);
+
+    if (!result.ok) {
+      setFormError(result.error);
+      return;
     }
+
+    setCreatedId(result.data.displayId);
+    toast({
+      tone: "success",
+      title: `Ticket ${result.data.displayId} created`,
+      description: "Our team has been notified and will reply here.",
+    });
+    router.refresh();
   }
 
-  if (submitted) {
+  if (createdId) {
     return (
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start gap-3 rounded-md border border-border bg-success-subtle p-4 text-sm text-foreground">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-              <Info className="h-3.5 w-3.5" aria-hidden />
+              <CircleCheck className="h-3.5 w-3.5" aria-hidden />
             </span>
             <div>
-              <p className="font-medium">Ticket draft saved locally</p>
+              <p className="font-medium">Ticket created</p>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                This demo does not connect to a backend yet, so the ticket was not actually created.
-                Your draft is still here if you want to edit it before connecting the backend.
+                Your ticket is <span className="font-mono">{createdId}</span>. Our team will
+                reply in this thread, and you can follow it from your queue.
               </p>
             </div>
           </div>
         </CardContent>
-        <CardFooter className="justify-end border-t border-border">
+        <CardFooter className="justify-end gap-2 border-t border-border">
           <ButtonLink href="/dashboard/tickets" variant="secondary" size="sm">
             Back to my tickets
+          </ButtonLink>
+          <ButtonLink href={`/dashboard/tickets/${createdId}`} size="sm">
+            Open ticket
           </ButtonLink>
         </CardFooter>
       </Card>
@@ -125,17 +107,16 @@ export function CreateTicketForm() {
               id="ticket-subject"
               name="subject"
               placeholder="Briefly describe the problem"
-              value={subject}
-              onChange={(e) => handleSubjectChange(e.target.value)}
-              aria-invalid={subjectError ? true : undefined}
-              aria-describedby={subjectError ? "ticket-subject-error" : undefined}
-              className={subjectError ? "aria-[invalid=true]" : undefined}
+              value={values.subject ?? ""}
+              onChange={(e) => setValue("subject", e.target.value)}
+              aria-invalid={errors.subject ? true : undefined}
+              aria-describedby={errors.subject ? "ticket-subject-error" : undefined}
             />
-            {subjectError ? (
+            {errors.subject && (
               <FieldError id="ticket-subject-error" className="mt-1">
-                {subjectError}
+                {errors.subject}
               </FieldError>
-            ) : null}
+            )}
             <FieldHint>
               One clear sentence works best, e.g. “Double charge on September invoice”.
             </FieldHint>
@@ -147,8 +128,10 @@ export function CreateTicketForm() {
               <Select
                 id="ticket-category"
                 name="category"
-                value={category}
-                onChange={(e) => handleCategoryChange(e.target.value)}
+                value={values.category ?? ""}
+                onChange={(e) => setValue("category", e.target.value)}
+                aria-invalid={errors.category ? true : undefined}
+                aria-describedby={errors.category ? "ticket-category-error" : undefined}
               >
                 <option value="" disabled>
                   Choose a category…
@@ -159,15 +142,21 @@ export function CreateTicketForm() {
                   </option>
                 ))}
               </Select>
-              <FieldHint>Helps us route your ticket to the right team.</FieldHint>
+              {errors.category ? (
+                <FieldError id="ticket-category-error" className="mt-1">
+                  {errors.category}
+                </FieldError>
+              ) : (
+                <FieldHint>Helps us route your ticket to the right team.</FieldHint>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ticket-priority">Priority</Label>
               <Select
                 id="ticket-priority"
                 name="priority"
-                value={priority}
-                onChange={(e) => handlePriorityChange(e.target.value)}
+                value={values.priority ?? "medium"}
+                onChange={(e) => setValue("priority", e.target.value)}
               >
                 {TICKET_PRIORITIES.map((p) => (
                   <option key={p} value={p}>
@@ -186,39 +175,43 @@ export function CreateTicketForm() {
               name="description"
               rows={7}
               placeholder="What did you expect, and what happened instead? Include steps, request IDs, or screenshots if you have them."
-              value={description}
-              onChange={(e) => handleDescriptionChange(e.target.value)}
-              aria-invalid={descriptionError ? true : undefined}
-              aria-describedby={descriptionError ? "ticket-description-error" : undefined}
-              className={descriptionError ? "aria-[invalid=true]" : undefined}
+              value={values.description ?? ""}
+              onChange={(e) => setValue("description", e.target.value)}
+              aria-invalid={errors.description ? true : undefined}
+              aria-describedby={errors.description ? "ticket-description-error" : undefined}
             />
-            {descriptionError ? (
+            {errors.description && (
               <FieldError id="ticket-description-error" className="mt-1">
-                {descriptionError}
+                {errors.description}
               </FieldError>
-            ) : null}
+            )}
           </div>
 
-          <div className="rounded-md border border-border bg-surface-muted p-3">
-            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <Info className="h-4 w-4 shrink-0 text-info" aria-hidden />
-              Attachments can be added to the conversation after the ticket is created.
+          <div className="space-y-2">
+            <p className="text-[13px] font-medium text-foreground">Attachments</p>
+            <p className="text-[13px] text-muted-foreground">
+              Screenshots, logs, or PDFs. Up to 10 MB each.
             </p>
+            <AttachmentPicker files={files} onChange={setFiles} disabled={pending} />
           </div>
 
           <CardFooter className="justify-between border-t border-border pt-4">
             <p className="text-[13px] text-muted-foreground">
-              Median first response today:{" "}
-              <span className="font-medium text-foreground">48 min</span>
+              We reply to most tickets within one business day.
             </p>
             <div className="flex items-center gap-2">
               <ButtonLink href="/dashboard/tickets" variant="ghost" size="md">
                 Cancel
               </ButtonLink>
-              <Button type="submit" disabled={!canSubmit} aria-disabled={!canSubmit || undefined}>
+              <Button type="submit" disabled={pending}>
                 {pending ? "Submitting…" : "Submit ticket"}
               </Button>
             </div>
+            {formError && (
+              <p role="alert" className="w-full text-right text-[13px] text-danger">
+                {formError}
+              </p>
+            )}
           </CardFooter>
         </form>
       </CardContent>

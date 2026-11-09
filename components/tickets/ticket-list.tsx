@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { statusConfig, TICKET_STATUSES, type TicketStatus } from "@/lib/ticket-config";
-import type { Ticket } from "@/lib/mock-data";
+import type { Ticket } from "@/lib/view-types";
 import { EmptyState } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { TicketRow } from "@/components/tickets/ticket-row";
@@ -18,8 +18,11 @@ export function TicketList({
   showCreateButton = false,
   createLabel = "Create ticket",
   createHref = "/dashboard/tickets/new",
+  initialQuery = "",
 }: {
   tickets: Ticket[];
+  /** Seeds the search box, e.g. from the topbar `?q=` parameter. */
+  initialQuery?: string;
   /** Base path for row links, e.g. "/dashboard/tickets" or "/admin/tickets". */
   basePath: string;
   showCreateButton?: boolean;
@@ -27,7 +30,7 @@ export function TicketList({
   createHref?: string;
 }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
 
   const counts = useMemo(() => {
     const map = new Map<StatusFilter, number>();

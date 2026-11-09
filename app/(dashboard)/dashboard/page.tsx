@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Inbox, MessageSquareText, CheckCircle2, Clock, ArrowRight } from "lucide-react";
-import { currentUser, myTickets, myAnsweredTickets, userNotifications } from "@/lib/mock-data";
-import { getRepliesForTicket } from "@/lib/mock-data";
-import { formatDateTime, formatRelativeTime, formatDate } from "@/lib/format";
+import { listMyAnsweredTickets, listMyTickets } from "@/lib/data/dal/tickets";
+import { listNotifications } from "@/lib/data/dal/people";
+import { getActor } from "@/lib/data/dal/session";
+import { formatRelativeTime } from "@/lib/format";
 import { isActiveStatus } from "@/lib/ticket-config";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,27 +16,37 @@ export const metadata: Metadata = {
   title: "Dashboard",
 };
 
-function latestReplyFor(ticketId: string): { body: string; at: string } | null {
-  const replies = getRepliesForTicket(ticketId);
-  const agentReplies = replies.filter((r) => r.authorRole === "admin" && r.body);
-  if (agentReplies.length === 0) return null;
-  const last = agentReplies[agentReplies.length - 1];
-  return { body: last.body ?? "", at: last.createdAt };
-}
+export default async function CustomerDashboardPage() {
+  const [currentUser, myTickets, myAnsweredTickets, userNotifications] = await Promise.all([
+    getActor(),
+    listMyTickets(),
+    listMyAnsweredTickets(),
+    listNotifications(20),
+  ]);
+  if (!currentUser) return null; // layout already redirected
 
-export default function CustomerDashboardPage() {
-  const open = myTickets.filter((t) => isActiveStatus(t.status));
-  const answered = myAnsweredTickets;
+  // The dashboard shows a summary, so it reads the first page of each list.
+  const tickets = myTickets;
+  const open = tickets.items.filter((t) => isActiveStatus(t.status));
   const unread = userNotifications.filter((n) => !n.read).length;
   const needsAttention = open.filter((t) => t.firstResponseAt === null && t.resolvedAt === null);
-  const mostRecent = myTickets[0];
-  const latestAgentReply = mostRecent ? latestReplyFor(mostRecent.id) : null;
+  const mostRecent = tickets.items[0];
+  // The preview on an answered ticket is the latest public message in the thread.
+  const latestAgentReply =
+    mostRecent && mostRecent.firstResponseAt
+      ? { body: mostRecent.preview, at: mostRecent.updatedAt }
+      : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Dashboard"
         description={`Welcome back, ${currentUser.name.split(" ")[0]}.`}
+        actions={
+          <ButtonLink href="/dashboard/activity" variant="secondary" size="sm">
+            View activity
+          </ButtonLink>
+        }
       />
 
       {/* Greeting card */}
@@ -45,7 +56,7 @@ export default function CustomerDashboardPage() {
           <div className="min-w-0 flex-1">
             <p className="text-lg font-semibold">{currentUser.name}</p>
             <p className="text-sm text-muted-foreground">
-              {currentUser.email} · Member since {formatDate(currentUser.joinedAt)}
+              {currentUser.email}
             </p>
           </div>
           <ButtonLink href="/dashboard/tickets/new" size="sm">
@@ -59,7 +70,7 @@ export default function CustomerDashboardPage() {
         <StatCard
           icon={Inbox}
           label="Total tickets"
-          value={String(myTickets.length)}
+          value={String(myTickets.total)}
           href="/dashboard/tickets"
         />
         <StatCard
@@ -72,7 +83,7 @@ export default function CustomerDashboardPage() {
         <StatCard
           icon={MessageSquareText}
           label="Answered"
-          value={String(answered.length)}
+          value={String(myAnsweredTickets.total)}
           href="/dashboard/tickets/answered"
         />
         <StatCard
@@ -198,7 +209,10 @@ function StatCard({
   return (
     <Link href={href} className="group">
       <Card className="h-full p-4 transition group-hover:border-border-strong group-hover:shadow-md">
-        <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {label}
+        </p>
         <p className={cn("mt-2 font-mono text-3xl font-semibold tabular-nums", tone ?? "text-foreground")}>
           {value}
         </p>

@@ -1,0 +1,1 @@
+ALTER TABLE "auth"."session" ADD COLUMN "impersonated_by" text;

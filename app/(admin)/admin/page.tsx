@@ -8,11 +8,12 @@ import {
   TrendingUp,
 } from "lucide-react";
 import {
-  adminStats,
-  adminAnsweredTickets,
-  sortedActivityLog,
-  unansweredTickets,
-} from "@/lib/mock-data";
+  getAdminStats,
+  getQueueCounts,
+  listAnsweredTickets,
+  listUnansweredTickets,
+} from "@/lib/data/dal/tickets";
+import { listActivity } from "@/lib/data/dal/people";
 import { formatLongDay, formatRelativeTime } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
@@ -21,6 +22,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { SlaBadge } from "@/components/ui/sla";
 import { PriorityInline, StatusBadge } from "@/components/tickets/status-badges";
 import { NOW } from "@/lib/format";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
 export const metadata: Metadata = {
   title: "Dashboard · Handly admin",
@@ -36,21 +38,34 @@ const kindIcon = {
   user_admin: MessageSquareText,
 } as const;
 
-export default function AdminDashboardPage() {
-  const maxCreated = Math.max(...adminStats.ticketsByDay.map((d) => d.created + d.resolved));
-  const totalCategory = adminStats.byCategory.reduce((sum, c) => sum + c.value, 0);
+export default async function AdminDashboardPage() {
+  await requireAdminPage();
+  const [adminStats, liveCounts, unansweredTickets, adminAnsweredTickets, sortedActivityLog] =
+    await Promise.all([
+      getAdminStats(),
+      getQueueCounts(),
+      listUnansweredTickets(),
+      listAnsweredTickets(),
+      listActivity("1"),
+    ]);
+
+  const maxCreated = Math.max(
+    1,
+    ...adminStats.ticketsByDay.map((d) => d.created + d.resolved),
+  );
+  const totalCategory = Math.max(1, adminStats.byCategory.reduce((sum, c) => sum + c.value, 0));
 
   const stats = [
     {
       label: "Open tickets",
-      value: adminStats.openTickets,
+      value: liveCounts.open,
       hint: "Across all queues",
       href: "/admin/tickets",
       tone: "text-info",
     },
     {
       label: "Unanswered",
-      value: adminStats.unanswered,
+      value: liveCounts.unanswered,
       hint: "Waiting for first reply",
       href: "/admin/tickets/unanswered",
       tone: "text-danger",
@@ -64,7 +79,7 @@ export default function AdminDashboardPage() {
     },
     {
       label: "Avg. first response",
-      value: `${adminStats.avgFirstResponseHours}h`,
+      value: `${adminStats.avgFirstResponseHours.toFixed(1)}h`,
       hint: "Last 7 days",
       href: "/admin/activity",
       tone: "text-foreground",
@@ -113,13 +128,14 @@ export default function AdminDashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
-            {/* Static bar chart: one column per day, created (brand) stacked on resolved (success) */}
+            {/* Static bar chart: one column per day, created (brand) stacked on resolved (success).
+                Each column gets an explicit height so the percentage bar heights resolve. */}
             <div className="flex h-40 items-end gap-3" role="img" aria-label="Bar chart of created and resolved tickets per day, last 7 days">
               {adminStats.ticketsByDay.map((d) => {
                 const total = d.created + d.resolved;
                 return (
-                  <div key={d.label} className="flex flex-1 flex-col items-center gap-2">
-                    <div className="flex w-full max-w-10 flex-1 flex-col justify-end gap-0.5">
+                  <div key={d.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                    <div className="flex h-full w-full max-w-10 flex-1 flex-col justify-end gap-0.5">
                       <div
                         className="w-full rounded-t bg-primary/80"
                         style={{ height: `${(d.created / maxCreated) * 100}%` }}
@@ -134,7 +150,7 @@ export default function AdminDashboardPage() {
                         {d.label}: {d.created} created, {d.resolved} resolved
                       </span>
                     </div>
-                    <span className="text-[11px] font-medium text-muted-foreground">{d.label}</span>
+                    <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{d.label}</span>
                     <span className="sr-only">{total} total</span>
                   </div>
                 );
@@ -199,7 +215,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent className="p-0">
             <ul className="divide-y divide-border">
-              {unansweredTickets.slice(0, 4).map((t) => (
+              {unansweredTickets.items.slice(0, 4).map((t) => (
                 <li key={t.id}>
                   <Link
                     href={`/admin/tickets/${t.displayId}`}
@@ -233,7 +249,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <ol className="space-y-3">
-              {sortedActivityLog.slice(0, 6).map((entry) => {
+              {sortedActivityLog.items.slice(0, 6).map((entry) => {
                 const Icon = kindIcon[entry.kind];
                 return (
                   <li key={entry.id} className="flex gap-3">
@@ -276,7 +292,7 @@ export default function AdminDashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           <ul className="divide-y divide-border">
-            {adminAnsweredTickets.slice(0, 3).map((t) => (
+            {adminAnsweredTickets.items.slice(0, 3).map((t) => (
               <li key={t.id}>
                 <Link
                   href={`/admin/tickets/${t.displayId}`}

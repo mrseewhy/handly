@@ -8,73 +8,51 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, FieldHint, FieldError } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/cn";
+import { rules, useFormFields } from "@/lib/use-form-fields";
 import { useState } from "react";
+import { requestPasswordResetAction } from "@/lib/data/actions/auth";
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+const formRules = { email: rules.email() };
 
 export function ForgotPasswordForm() {
   const { toast } = useToast();
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { values, errors, setValue, touchAll, isValid, reset } = useFormFields({
+    rules: formRules,
+  });
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
 
-  const emailTouched = email !== "";
-  const emailValid = isValidEmail(email);
-  const emailFieldInvalid = emailTouched && !emailValid;
-  const canSubmit = emailValid && !pending;
-
-  function handleEmailChange(value: string) {
-    setEmail(value);
-    if (error) setError(null);
-    if (sent) setSent(false);
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    touchAll();
+    if (!isValid || pending) return;
 
-    setError(null);
+    setPending(true);
+    const result = await requestPasswordResetAction({ email: values.email ?? "" });
+    setPending(false);
 
-    if (!emailValid) {
-      setError("Enter a valid email address.");
+    if (!result.ok) {
+      toast({ tone: "error", title: "Could not send reset link", description: result.error });
       return;
     }
 
-    setPending(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      setSent(true);
-      toast({
-        tone: "info",
-        title: "Reset link sent",
-        description:
-          "This demo does not connect to a backend yet. In production a real reset link would be on its way.",
-      });
-    } catch {
-      toast({
-        tone: "error",
-        title: "Could not send reset link",
-        description:
-          "We could not start the reset flow. Try again in a moment.",
-      });
-    } finally {
-      setPending(false);
-    }
+    setSent(true);
+    toast({
+      tone: "info",
+      title: "Check your inbox",
+      description: "If that email is registered, a reset link is on its way.",
+    });
+  }
+
+  function handleEdit() {
+    setSent(false);
+    reset();
   }
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="flex h-14 items-center justify-between px-4 md:px-6 border-b border-border bg-surface">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-md font-semibold tracking-tight text-foreground"
-        >
-          <Logo />
-        </Link>
+      <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 md:px-6">
+        <Logo />
         <ThemeToggle />
       </header>
 
@@ -103,7 +81,7 @@ export function ForgotPasswordForm() {
           <Card>
             <CardContent className="p-6">
               {sent ? (
-                <div className="items-start gap-3 rounded-md bg-success-subtle p-4 text-[13px] text-success">
+                <div className="flex items-start gap-3 rounded-md bg-success-subtle p-4 text-[13px] text-success">
                   <MailCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <span>
                     If an account exists for that email, a reset link is on its way. It expires in 30
@@ -121,34 +99,24 @@ export function ForgotPasswordForm() {
                       inputMode="email"
                       autoComplete="email"
                       placeholder="you@company.com"
-                      value={email}
-                      onChange={(e) => handleEmailChange(e.target.value)}
+                      value={values.email ?? ""}
+                      onChange={(e) => setValue("email", e.target.value)}
                       disabled={pending}
-                      aria-invalid={emailFieldInvalid || undefined}
-                      aria-describedby={error || (emailTouched && !emailValid) ? "reset-email-error" : undefined}
-                      className={cn(emailFieldInvalid && "aria-[invalid=true]")}
+                      aria-invalid={errors.email ? true : undefined}
+                      aria-describedby={errors.email ? "reset-email-error" : undefined}
                     />
                     <FieldHint>
                       The reset link expires after 30 minutes. Check your spam folder if it does not
                       arrive.
                     </FieldHint>
-                    {error ? (
+                    {errors.email && (
                       <FieldError id="reset-email-error" className="mt-1">
-                        {error}
+                        {errors.email}
                       </FieldError>
-                    ) : emailTouched && !emailValid ? (
-                      <FieldError id="reset-email-error" className="mt-1">
-                        Enter a valid email address.
-                      </FieldError>
-                    ) : null}
+                    )}
                   </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={!canSubmit}
-                    aria-disabled={!canSubmit || undefined}
-                  >
+                  <Button type="submit" className="w-full" disabled={pending}>
                     {pending ? "Sending…" : "Send reset link"}
                   </Button>
                 </form>
@@ -157,10 +125,22 @@ export function ForgotPasswordForm() {
           </Card>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Remembered it after all?{" "}
-            <Link href="/sign-in" className="font-medium text-primary hover:underline underline-offset-4">
-              Back to sign in
-            </Link>
+            {sent ? (
+              <button
+                type="button"
+                onClick={handleEdit}
+                className="font-medium text-primary hover:underline underline-offset-4"
+              >
+                Use a different email
+              </button>
+            ) : (
+              <>
+                Remembered it after all?{" "}
+                <Link href="/sign-in" className="font-medium text-primary hover:underline underline-offset-4">
+                  Back to sign in
+                </Link>
+              </>
+            )}
           </p>
         </div>
       </main>

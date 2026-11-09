@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { isActiveStatus } from "@/lib/ticket-config";
-import { myTickets } from "@/lib/mock-data";
+import { listMyTickets } from "@/lib/data/dal/tickets";
 import { PageHeader } from "@/components/ui/page-header";
+import { Pagination } from "@/components/ui/pagination";
 import { TicketList } from "@/components/tickets/ticket-list";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ type StatusFilter = "open" | "closed" | "all";
 export default async function MyTicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   const p = await searchParams;
   const status: StatusFilter =
@@ -21,10 +22,14 @@ export default async function MyTicketsPage({
       ? p.status
       : "all";
 
+  // Status filtering happens on the current page's items; the total below is
+  // the full count so the heading stays honest about how many exist.
+  const myTickets = await listMyTickets(p.page);
+
   const visible =
     status === "all"
-      ? myTickets
-      : myTickets.filter((t) =>
+      ? myTickets.items
+      : myTickets.items.filter((t) =>
           status === "open" ? isActiveStatus(t.status) : !isActiveStatus(t.status),
         );
 
@@ -36,9 +41,20 @@ export default async function MyTicketsPage({
       />
       <StatusTabs current={status} />
       <p className="text-[13px] text-subtle-foreground" aria-live="polite">
-        Showing {visible.length} of {myTickets.length} ticket{myTickets.length === 1 ? "" : "s"}.
+        Showing {visible.length} of {myTickets.total} ticket
+        {myTickets.total === 1 ? "" : "s"}.
       </p>
-      <TicketList tickets={visible} basePath="/dashboard/tickets" showCreateButton />
+      <TicketList
+        tickets={visible}
+        basePath="/dashboard/tickets"
+        showCreateButton
+        initialQuery={p.q ?? ""}
+      />
+      <Pagination
+        page={myTickets}
+        basePath="/dashboard/tickets"
+        query={{ status: p.status, q: p.q }}
+      />
     </div>
   );
 }

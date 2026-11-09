@@ -3,14 +3,17 @@
 import { ComponentErrorBoundary } from "@/components/error-boundary";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState as useReactState } from "react";
 import { Menu, Plus, Search } from "lucide-react";
-import { currentUser, currentAdmin } from "@/lib/mock-data";
 import { DashboardSidebar } from "@/components/layout/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsButton } from "@/components/layout/notifications";
 import { Avatar } from "@/components/ui/avatar";
 import { ButtonLink } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import type { AppNotification, SessionUser } from "@/lib/view-types";
+import type { PersonRole } from "@/lib/view-types";
 
 /**
  * Client shell for the dashboard area: owns the mobile sidebar drawer state
@@ -18,14 +21,33 @@ import { cn } from "@/lib/cn";
  */
 export function DashboardShell({
   role,
+  user,
+  notifications,
+  unansweredCount,
+  unhandledMessages = 0,
   children,
 }: {
-  role: "user" | "admin";
+  role: PersonRole;
+  user: SessionUser;
+  notifications: AppNotification[];
+  unansweredCount: number;
+  unhandledMessages?: number;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileDrawerRef = useRef<HTMLDivElement | null>(null);
-  const person = role === "admin" ? currentAdmin : currentUser;
+  const person = user;
+  const router = useRouter();
+  const [search, setSearch] = useReactState("");
+
+  // The queue list pages own the actual filtering; the topbar just navigates
+  // to them with `?q=` so there is one search implementation, not two.
+  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const q = search.trim();
+    const list = role === "admin" ? "/admin/tickets" : "/dashboard/tickets";
+    router.push(q ? `${list}?q=${encodeURIComponent(q)}` : list);
+  }
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -62,16 +84,13 @@ export function DashboardShell({
     }
   }, [mobileOpen]);
 
-  const pages = {
-    user: { root: "/dashboard", label: "Tickets" },
-    admin: { root: "/admin", label: "Dashboard" },
-  };
-  const pageContext = pages[role];
-
   return (
     <div className="min-h-dvh bg-background">
       <DashboardSidebar
         role={role}
+        user={user}
+        unansweredCount={unansweredCount}
+        unhandledMessages={unhandledMessages}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
       />
@@ -90,24 +109,34 @@ export function DashboardShell({
             <Menu className="h-4 w-4" aria-hidden />
           </button>
 
-          <div className="relative hidden max-w-md flex-1 md:block">
+          <form
+            onSubmit={submitSearch}
+            role="search"
+            className="relative hidden max-w-md flex-1 md:block"
+          >
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden
             />
             <input
               type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tickets…"
               className="h-9 w-full rounded-md border border-border bg-surface-muted pl-9 pr-14 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Search tickets"
             />
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-surface px-1.5 font-mono text-[11px] text-muted-foreground lg:block">
-              ⌘K
-            </kbd>
-          </div>
+            <button
+              type="submit"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+              aria-label="Search"
+            >
+              ↵
+            </button>
+          </form>
 
           <div className="ml-auto flex items-center gap-2">
-            {role === "user" ? (
+            {role === "customer" ? (
               <ButtonLink href="/dashboard/tickets/new" size="sm" className="hidden sm:inline-flex">
                 <Plus className="h-4 w-4" aria-hidden />
                 Create ticket
@@ -118,13 +147,13 @@ export function DashboardShell({
               </ButtonLink>
             )}
             <ThemeToggle />
-            <NotificationsButton role={role} />
+            <NotificationsButton role={role} items={notifications} />
             <Link
               href={role === "admin" ? "/admin" : "/dashboard/settings"}
               aria-label="Open profile"
               className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Avatar initials={person.initials} size="md" customer={role === "user"} />
+              <Avatar initials={person.initials} size="md" customer={role === "customer"} />
             </Link>
           </div>
         </header>

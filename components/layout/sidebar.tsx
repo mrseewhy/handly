@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BadgeCheck,
   Bell,
+  History,
   LifeBuoy,
   LogOut,
   MessageSquareText,
@@ -13,9 +14,12 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { currentUser, currentAdmin, type Person } from "@/lib/mock-data";
+import { Mail } from "lucide-react";
+import { signOutAction } from "@/lib/data/actions/auth";
+import type { SessionUser } from "@/lib/view-types";
 import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/ui/logo";
+import type { PersonRole } from "@/lib/view-types";
 
 interface NavItem {
   href: string;
@@ -30,13 +34,18 @@ interface NavSection {
   items: NavItem[];
 }
 
-function useNavSections(role: "user" | "admin"): NavSection[] {
+function useNavSections(
+  role: PersonRole,
+  unansweredCount: number,
+  unhandledMessages: number,
+): NavSection[] {
   const user: NavSection[] = [
     {
       title: "Support",
       items: [
         { href: "/dashboard/tickets", label: "My tickets", icon: TicketIcon },
         { href: "/dashboard/tickets/answered", label: "Answered", icon: MessageSquareText },
+        { href: "/dashboard/activity", label: "Activity", icon: History },
         { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
       ],
     },
@@ -54,7 +63,7 @@ function useNavSections(role: "user" | "admin"): NavSection[] {
     {
       title: "Queues",
       items: [
-        { href: "/admin/tickets/unanswered", label: "Unanswered", icon: MessageSquareText, count: 4, countTone: "danger" },
+        { href: "/admin/tickets/unanswered", label: "Unanswered", icon: MessageSquareText, count: unansweredCount, countTone: "danger" },
         { href: "/admin/tickets/answered", label: "Answered", icon: TicketIcon },
         { href: "/admin/tickets", label: "All tickets", icon: TicketIcon },
       ],
@@ -62,9 +71,17 @@ function useNavSections(role: "user" | "admin"): NavSection[] {
     {
       title: "Manage",
       items: [
+        { href: "/admin/messages", label: "Messages", icon: Mail, count: unhandledMessages || undefined, countTone: "danger" },
         { href: "/admin/admins", label: "Admins", icon: LifeBuoy },
         { href: "/admin/users", label: "Users", icon: Settings },
         { href: "/admin/activity", label: "Activity log", icon: MessageSquareText },
+      ],
+    },
+    {
+      title: "Account",
+      items: [
+        { href: "/admin/notifications", label: "Notifications", icon: Bell },
+        { href: "/admin/profile", label: "Profile & settings", icon: Settings },
       ],
     },
   ];
@@ -108,8 +125,18 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
   );
 }
 
-function SidebarNav({ role, onNavigate }: { role: "user" | "admin"; onNavigate?: () => void }) {
-  const sections = useNavSections(role);
+function SidebarNav({
+  role,
+  unansweredCount,
+  unhandledMessages,
+  onNavigate,
+}: {
+  role: PersonRole;
+  unansweredCount: number;
+  unhandledMessages: number;
+  onNavigate?: () => void;
+}) {
+  const sections = useNavSections(role, unansweredCount, unhandledMessages);
   return (
     <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto p-3">
       {sections.map((section) => (
@@ -128,25 +155,27 @@ function SidebarNav({ role, onNavigate }: { role: "user" | "admin"; onNavigate?:
   );
 }
 
-function UserCard({ person }: { person: Person }) {
+function UserCard({ person }: { person: SessionUser }) {
   return (
     <div className="border-t border-border p-3">
       <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
-        <Avatar initials={person.initials} size="md" customer={person.role === "user"} online />
+        <Avatar initials={person.initials} size="md" customer={person.role === "customer"} online />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {person.role === "admin" ? person.title ?? "Support" : person.email}
+            {person.role === "admin" ? "Support admin" : person.email}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label="Sign out"
-          title="Sign out"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
-        >
-          <LogOut className="h-4 w-4" aria-hidden />
-        </button>
+        <form action={signOutAction}>
+          <button
+            type="submit"
+            aria-label="Sign out"
+            title="Sign out"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -154,14 +183,20 @@ function UserCard({ person }: { person: Person }) {
 
 export function DashboardSidebar({
   role,
+  user,
+  unansweredCount,
+  unhandledMessages,
   mobileOpen,
   onCloseMobile,
 }: {
-  role: "user" | "admin";
+  role: PersonRole;
+  user: SessionUser;
+  unansweredCount: number;
+  unhandledMessages: number;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
-  const person = role === "admin" ? currentAdmin : currentUser;
+  const person = user;
   const homeHref = role === "admin" ? "/admin" : "/dashboard";
 
   return (
@@ -171,7 +206,7 @@ export function DashboardSidebar({
         <div className="flex h-14 items-center border-b border-border px-4">
           <Logo href={homeHref} />
         </div>
-        <SidebarNav role={role} />
+        <SidebarNav role={role} unansweredCount={unansweredCount} unhandledMessages={unhandledMessages} />
         <UserCard person={person} />
       </aside>
 
@@ -201,7 +236,7 @@ export function DashboardSidebar({
                 <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
-            <SidebarNav role={role} onNavigate={onCloseMobile} />
+            <SidebarNav role={role} unansweredCount={unansweredCount} unhandledMessages={unhandledMessages} onNavigate={onCloseMobile} />
             <UserCard person={person} />
           </aside>
         </div>

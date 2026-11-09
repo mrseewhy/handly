@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, DangerSummary } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import type { Person } from "@/lib/mock-data";
+import type { Person } from "@/lib/view-types";
+import { setUserSuspended } from "@/lib/data/actions/tickets";
 
 export function UserActions({ user }: { user?: Person }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [action, setAction] = useState<"suspend" | "restore" | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function openConfirm(nextAction: "suspend" | "restore", id: string) {
     setPendingId(id);
@@ -21,18 +23,26 @@ export function UserActions({ user }: { user?: Person }) {
 
   function handleConfirm() {
     if (!pendingId || !action) return;
-    // No backend: simulate the confirmation path only.
-    toast({
-      tone: action === "suspend" ? "warning" : "success",
-      title: action === "suspend" ? "User suspended" : "User restored",
-      description:
-        action === "suspend"
-          ? "Sending a suspension notice is pending backend integration."
-          : "Restoring access is pending backend integration.",
+    const suspend = action === "suspend";
+
+    startTransition(async () => {
+      const result = await setUserSuspended(pendingId, suspend);
+      setOpen(false);
+      setPendingId(null);
+      setAction(null);
+
+      if (!result.ok) {
+        toast({ tone: "error", title: "Could not update user", description: result.error });
+        return;
+      }
+      toast({
+        tone: suspend ? "warning" : "success",
+        title: suspend ? "User suspended" : "User restored",
+        description: suspend
+          ? "Their sessions were ended and they can no longer sign in."
+          : "Their access has been re-enabled.",
+      });
     });
-    setOpen(false);
-    setPendingId(null);
-    setAction(null);
   }
 
   if (!user) return null;
@@ -73,6 +83,7 @@ export function UserActions({ user }: { user?: Person }) {
         onClick={() =>
           openConfirm(isSuspended ? "restore" : "suspend", user.id)
         }
+        disabled={pending}
         className={isSuspended ? "text-success hover:bg-success-subtle hover:text-success" : ""}
         aria-label={isSuspended ? `Restore ${user.name}` : `Suspend ${user.name}`}
       >

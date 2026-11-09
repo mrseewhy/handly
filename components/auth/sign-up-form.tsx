@@ -9,96 +9,62 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, FieldHint, FieldError } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
-import { useState } from "react";
+import { rules, useFormFields } from "@/lib/use-form-fields";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { signUpAction } from "@/lib/data/actions/auth";
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+const formRules = {
+  name: rules.minLength(2, "Enter your full name."),
+  email: rules.email("Enter a valid work email address."),
+  password: rules.minLength(12, "Use at least 12 characters."),
+};
+
+const perks = ["Unlimited customers on every plan", "Cancel any time, keep your exports"];
 
 export function SignUpForm() {
   const { toast } = useToast();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { values, errors, setValue, touchAll, isValid } = useFormFields({
+    rules: formRules,
+  });
   const [showPassword, setShowPassword] = useState(false);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const nameTouched = name !== "";
-  const emailTouched = email !== "";
-  const passwordTouched = password !== "";
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
-  const nameValid = name.trim().length >= 2;
-  const emailValid = isValidEmail(email);
-  const passwordValid = password.length >= 12;
-
-  const nameFieldInvalid = nameTouched && !nameValid;
-  const emailFieldInvalid = emailTouched && !emailValid;
-  const passwordFieldInvalid = passwordTouched && !passwordValid;
-
-  const canSubmit = nameValid && emailValid && passwordValid;
-
-  function handleNameChange(value: string) {
-    setName(value);
-    if (nameError) setNameError(null);
-  }
-  function handleEmailChange(value: string) {
-    setEmail(value);
-    if (emailError) setEmailError(null);
-  }
-  function handlePasswordChange(value: string) {
-    setPassword(value);
-    if (passwordError) setPasswordError(null);
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    touchAll();
+    if (!isValid || pending) return;
+    setFormError(null);
 
-    setNameError(null);
-    setEmailError(null);
-    setPasswordError(null);
+    startTransition(async () => {
+      const result = await signUpAction({
+        name: values.name ?? "",
+        email: values.email ?? "",
+        password: values.password ?? "",
+      });
 
-    if (!nameValid) {
-      setNameError("Enter your full name.");
-      return;
-    }
-    if (!emailValid) {
-      setEmailError("Enter a valid work email address.");
-      return;
-    }
-    if (!passwordValid) {
-      setPasswordError("Use at least 12 characters.");
-      return;
-    }
+      if (!result.ok) {
+        setFormError(result.error);
+        return;
+      }
 
-    try {
       toast({
         tone: "success",
         title: "Account created",
-        description:
-          "This demo does not connect to a backend yet. In production you would be signed in automatically.",
+        description: "You are signed in. Create your first ticket to get started.",
       });
-    } catch {
-      toast({
-        tone: "error",
-        title: "Account creation failed",
-        description:
-          "We could not create your account. Try again in a moment.",
-      });
-    }
+      router.replace("/dashboard");
+      router.refresh();
+    });
   }
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="flex h-14 items-center justify-between px-4 md:px-6 border-b border-border bg-surface">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-md font-semibold tracking-tight text-foreground"
-        >
-          <Logo />
-        </Link>
+      <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 md:px-6">
+        <Logo />
         <ThemeToggle />
       </header>
 
@@ -132,21 +98,16 @@ export function SignUpForm() {
                     name="name"
                     autoComplete="name"
                     placeholder="Alex Rivera"
-                    value={name}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                    aria-invalid={nameFieldInvalid || undefined}
-                    aria-describedby={nameError || (nameTouched && !nameValid) ? "signup-name-error" : undefined}
-                    className={cn(nameFieldInvalid && "aria-[invalid=true]")}
+                    value={values.name ?? ""}
+                    onChange={(e) => setValue("name", e.target.value)}
+                    aria-invalid={errors.name ? true : undefined}
+                    aria-describedby={errors.name ? "signup-name-error" : undefined}
                   />
-                  {nameError ? (
+                  {errors.name && (
                     <FieldError id="signup-name-error" className="mt-1">
-                      {nameError}
+                      {errors.name}
                     </FieldError>
-                  ) : nameTouched && !nameValid ? (
-                    <FieldError id="signup-name-error" className="mt-1">
-                      Enter your full name.
-                    </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -158,21 +119,16 @@ export function SignUpForm() {
                     inputMode="email"
                     autoComplete="email"
                     placeholder="you@company.com"
-                    value={email}
-                    onChange={(e) => handleEmailChange(e.target.value)}
-                    aria-invalid={emailFieldInvalid || undefined}
-                    aria-describedby={emailError || (emailTouched && !emailValid) ? "signup-email-error" : undefined}
-                    className={cn(emailFieldInvalid && "aria-[invalid=true]")}
+                    value={values.email ?? ""}
+                    onChange={(e) => setValue("email", e.target.value)}
+                    aria-invalid={errors.email ? true : undefined}
+                    aria-describedby={errors.email ? "signup-email-error" : undefined}
                   />
-                  {emailError ? (
+                  {errors.email && (
                     <FieldError id="signup-email-error" className="mt-1">
-                      {emailError}
+                      {errors.email}
                     </FieldError>
-                  ) : emailTouched && !emailValid ? (
-                    <FieldError id="signup-email-error" className="mt-1">
-                      Enter a valid work email address.
-                    </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -184,20 +140,21 @@ export function SignUpForm() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       placeholder="At least 12 characters"
-                      value={password}
-                      onChange={(e) => handlePasswordChange(e.target.value)}
-                      aria-invalid={passwordFieldInvalid || undefined}
-                      aria-describedby={passwordError || (passwordTouched && !passwordValid) ? "signup-password-error" : undefined}
-                      className={cn(
-                        "pr-10",
-                        passwordFieldInvalid && "aria-[invalid=true]",
-                      )}
+                      value={values.password ?? ""}
+                      onChange={(e) => setValue("password", e.target.value)}
+                      aria-invalid={errors.password ? true : undefined}
+                      aria-describedby={errors.password ? "signup-password-error" : undefined}
+                      className="pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2.5 top-1/2 h-6 w-6 -translate-y-1/2 rounded text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                      className={cn(
+                        "absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2",
+                        "items-center justify-center rounded text-muted-foreground",
+                        "hover:bg-surface-muted hover:text-foreground",
+                      )}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" aria-hidden />
@@ -207,31 +164,25 @@ export function SignUpForm() {
                     </button>
                   </div>
                   <FieldHint>Use 12+ characters with a mix of letters, numbers, and symbols.</FieldHint>
-                  {passwordError ? (
+                  {errors.password && (
                     <FieldError id="signup-password-error" className="mt-1">
-                      {passwordError}
+                      {errors.password}
                     </FieldError>
-                  ) : passwordTouched && !passwordValid ? (
-                    <FieldError id="signup-password-error" className="mt-1">
-                      Use at least 12 characters.
-                    </FieldError>
-                  ) : null}
+                  )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={!canSubmit}
-                  aria-disabled={!canSubmit || undefined}
-                >
-                  Create account
+                {formError && (
+                  <p role="alert" className="rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-[13px] text-danger">
+                    {formError}
+                  </p>
+                )}
+
+                <Button type="submit" className="w-full" disabled={pending}>
+                  {pending ? "Creating account…" : "Create account"}
                 </Button>
 
                 <ul className="space-y-1.5 text-[13px] text-muted-foreground">
-                  {[
-                    "Unlimited customers on every plan",
-                    "Cancel any time, keep your exports",
-                  ].map((item) => (
+                  {perks.map((item) => (
                     <li key={item} className="flex items-center gap-2">
                       <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
                       {item}

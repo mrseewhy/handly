@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { marketingFeatures } from "@/lib/mock-data";
+import { marketingFeatures } from "@/lib/marketing-content";
 
 export const metadata: Metadata = {
   title: "Features · Handly",

@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import { MessageSquareText } from "lucide-react";
-import { myAnsweredTickets } from "@/lib/mock-data";
+import { listMyAnsweredTickets } from "@/lib/data/dal/tickets";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { TicketList } from "@/components/tickets/ticket-list";
+import { Pagination } from "@/components/ui/pagination";
 
 export const metadata: Metadata = {
   title: "Answered tickets · Handly",
 };
 
-export default function AnsweredTicketsPage() {
-  const hasTickets = myAnsweredTickets.length > 0;
+export default async function AnsweredTicketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const myAnsweredTickets = await listMyAnsweredTickets(params.page);
+  const hasTickets = myAnsweredTickets.items.length > 0;
 
   return (
     <div className="space-y-6">
@@ -18,7 +25,7 @@ export default function AnsweredTicketsPage() {
         description="Tickets our team has replied to. New replies move them to the top."
       />
       {hasTickets ? (
-        <TicketList tickets={myAnsweredTickets} basePath="/dashboard/tickets" />
+        <TicketList tickets={myAnsweredTickets.items} basePath="/dashboard/tickets" />
       ) : (
         <div className="rounded-lg border border-border bg-surface shadow-sm">
           <EmptyState
@@ -28,6 +35,8 @@ export default function AnsweredTicketsPage() {
           />
         </div>
       )}
+
+      <Pagination page={myAnsweredTickets} basePath="/dashboard/tickets/answered" />
     </div>
   );
 }

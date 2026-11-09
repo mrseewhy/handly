@@ -9,7 +9,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, CircleAlert, Info, TriangleAlert } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Info,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type ToastTone = "success" | "error" | "warning" | "info";
@@ -155,9 +161,9 @@ export function ToastHost({ items, onDismiss, className }: ToastHostProps) {
                 type="button"
                 onClick={() => onDismiss(item.id)}
                 aria-label="Dismiss notification"
-                className="mt-0.5 h-6 w-6 rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
               >
-                <Info className="h-3.5 w-3.5" aria-hidden />
+                <X className="h-3.5 w-3.5" aria-hidden />
               </button>
             </div>
           </div>
@@ -167,8 +173,3 @@ export function ToastHost({ items, onDismiss, className }: ToastHostProps) {
   );
 }
 
-/**
- * Primitives for with-toast hosts that want loading spinners inside toasts.
- * Not a separate component on screen; used when composing toasts for actions.
- */
-export { TriangleAlert as ToastWarningIcon };

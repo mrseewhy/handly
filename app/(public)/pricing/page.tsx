@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Check } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { marketingFaq, pricingPlans } from "@/lib/mock-data";
+import { marketingFaq, pricingPlans } from "@/lib/marketing-content";
 import { cn } from "@/lib/cn";
 
 export const metadata: Metadata = {

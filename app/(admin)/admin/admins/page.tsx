@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ShieldCheck, UserPlus } from "lucide-react";
-import { adminAdmins } from "@/lib/mock-data";
+import { listAdmins } from "@/lib/data/dal/people";
 import { formatDate } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge } from "@/components/ui/avatar";
 import { AdminRowActions } from "@/components/admin/admin-row-actions";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
 export const metadata: Metadata = {
   title: "Admins · Handly admin",
@@ -19,7 +20,10 @@ const statusBadge: Record<string, string> = {
   suspended: "text-danger bg-danger-subtle",
 };
 
-export default function ManageAdminsPage() {
+export default async function ManageAdminsPage() {
+  await requireAdminPage();
+  const adminAdmins = await listAdmins();
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -61,7 +65,7 @@ export default function ManageAdminsPage() {
                     </span>
                   </td>
                   <td className="hidden px-4 py-3 md:table-cell">
-                    <span className="text-[13px]">{admin.title ?? "Support"}</span>
+                    <span className="text-[13px]">Support admin</span>
                   </td>
                   <td className="px-4 py-3">
                     <Badge className={statusBadge[admin.status]}>

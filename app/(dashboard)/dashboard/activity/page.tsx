@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MessageSquareText } from "lucide-react";
-import { myTickets } from "@/lib/mock-data";
-import { formatDateTime } from "@/lib/format";
+import { listMyActivity } from "@/lib/data/dal/people";
+import { formatRelativeTime } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -11,10 +11,8 @@ export const metadata: Metadata = {
   title: "Activity",
 };
 
-export default function UserActivityPage() {
-  const entries = myTickets
-    .slice()
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+export default async function UserActivityPage() {
+  const entries = await listMyActivity(50);
 
   return (
     <div className="space-y-6">
@@ -40,36 +38,30 @@ export default function UserActivityPage() {
             {entries.map((t) => (
               <li key={t.id}>
                 <Link
-                  href={`/dashboard/tickets/${t.displayId}`}
+                  href={
+                    t.href
+                      ? t.href.replace("/admin/tickets/", "/dashboard/tickets/")
+                      : "/dashboard/tickets"
+                  }
                   className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-muted"
                 >
                   <Avatar
-                    initials={t.creatorName.split(" ").map((p) => p[0]).join("")}
+                    initials={t.actorName.split(" ").map((p) => p[0]).join("")}
                     size="sm"
                     customer
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2">
-                      <span className="font-mono text-[13px] text-muted-foreground">
-                        {t.displayId}
-                      </span>
-                      <span className="truncate text-sm font-medium">{t.subject}</span>
-                    </p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">
-                      {t.status === "open"
-                        ? "Open ticket"
-                        : t.status === "resolved"
-                          ? "Resolved"
-                          : t.status === "closed"
-                            ? "Closed"
-                            : "Updated"}
+                    <p className="text-sm">
+                      <span className="font-medium">{t.actorName}</span>{" "}
+                      <span className="text-muted-foreground">{t.action}</span>{" "}
+                      <span className="truncate font-medium">{t.target}</span>
                     </p>
                   </div>
                   <time
-                    dateTime={t.updatedAt}
-                    className="w-24 text-right font-mono text-[13px] tabular-nums text-muted-foreground"
+                    dateTime={t.at}
+                    className="w-24 shrink-0 text-right font-mono text-[13px] tabular-nums text-muted-foreground"
                   >
-                    {formatDateTime(t.updatedAt)}
+                    {formatRelativeTime(t.at)}
                   </time>
                 </Link>
               </li>

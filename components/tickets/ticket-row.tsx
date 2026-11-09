@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatRelativeTime } from "@/lib/format";
-import type { Ticket } from "@/lib/mock-data";
+import type { Ticket } from "@/lib/view-types";
 import { Avatar } from "@/components/ui/avatar";
 import { SlaBadge } from "@/components/ui/sla";
 import { PriorityInline, StatusBadge } from "@/components/tickets/status-badges";
@@ -21,7 +21,6 @@ export function TicketRow({
   href?: string;
   className?: string;
 }) {
-  const Wrapper = href ? Link : "div";
   const assigneeInitials = ticket.assigneeName
     ? ticket.assigneeName
         .split(" ")
@@ -29,16 +28,14 @@ export function TicketRow({
         .join("")
     : null;
 
+  const rowClasses = cn(
+    "relative flex items-center gap-4 border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-muted",
+    selected && "bg-primary-subtle",
+    className,
+  );
+
   return (
-    <Wrapper
-      href={href ?? "#"}
-      aria-current={selected ? "true" : undefined}
-      className={cn(
-        "relative flex items-center gap-4 border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-muted",
-        selected && "bg-primary-subtle",
-        className,
-      )}
-    >
+    <RowShell href={href} selected={selected} className={rowClasses}>
       {/* Selected / unread indicators */}
       <span
         aria-hidden
@@ -86,6 +83,38 @@ export function TicketRow({
           {formatRelativeTime(ticket.updatedAt)}
         </time>
       </div>
-    </Wrapper>
+    </RowShell>
+  );
+}
+
+/**
+ * Renders a row as a link when `href` is present, otherwise a plain element.
+ * Kept separate so the polymorphic wrapper never spreads `href` onto a div.
+ */
+function RowShell({
+  href,
+  selected,
+  className,
+  children,
+}: {
+  href?: string;
+  selected: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const ariaCurrent = selected ? ("true" as const) : undefined;
+
+  if (!href) {
+    return (
+      <div aria-current={ariaCurrent} className={className}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={href} aria-current={ariaCurrent} className={className}>
+      {children}
+    </Link>
   );
 }

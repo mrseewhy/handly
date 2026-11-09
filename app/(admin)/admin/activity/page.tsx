@@ -10,12 +10,15 @@ import {
   ShieldCheck,
   UserCog,
 } from "lucide-react";
-import { sortedActivityLog } from "@/lib/mock-data";
+import { listActivity } from "@/lib/data/dal/people";
+import type { ActivityEntry } from "@/lib/view-types";
 import { formatDateTime, formatDayGroup, formatRelativeTime } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/breadcrumb";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
+import { Pagination } from "@/components/ui/pagination";
 import { Avatar } from "@/components/ui/avatar";
+import { requireAdminPage } from "@/lib/data/dal/session";
 
 export const metadata: Metadata = {
   title: "Activity log · Handly admin",
@@ -31,10 +34,18 @@ const kindMeta = {
   user_admin: { icon: CircleAlert, color: "text-danger" },
 } as const;
 
-export default function ActivityLogPage() {
+export default async function ActivityLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  await requireAdminPage();
+  const params = await searchParams;
+  const result = await listActivity(params.page);
+
   // Group entries by day (already sorted newest first).
-  const groups: Array<{ day: string; entries: typeof sortedActivityLog }> = [];
-  for (const entry of sortedActivityLog) {
+  const groups: Array<{ day: string; entries: ActivityEntry[] }> = [];
+  for (const entry of result.items) {
     const day = formatDayGroup(entry.at);
     const existing = groups.find((g) => g.day === day);
     if (existing) existing.entries.push(entry);
@@ -118,6 +129,8 @@ export default function ActivityLogPage() {
           ))}
         </div>
       )}
+
+      <Pagination page={result} basePath="/admin/activity" />
     </div>
   );
 }
